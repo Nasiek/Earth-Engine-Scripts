@@ -1,0 +1,132 @@
+// import census data feature
+var ConnCensTr = ee.FeatureCollection('ft:1xa2PvKTf7ynyAAEXEeHoltriaHFkyFJpvd74BLc6' );
+// print info to see what the columns are for analysis
+print('Census Tracts', ConnCensTr);
+// display + label + center map on layer
+var censusData= Map.addLayer(ConnCensTr, {color: '66b3ff'}, 'Census Data');
+Map.centerObject(ConnCensTr, 8);
+
+//get tracts with desired rent range: (filter all less than 1600 then subset tracts more than 1200)
+var highR = ConnCensTr.filterMetadata('Med_Rent', "less_than", 1600);
+var DesRent = highR.filterMetadata('Med_Rent', "greater_than", 1100);
+// display selected tracts
+Map.addLayer(DesRent,{color: '660000'}, "Desired Rent")
+
+/* find the stats for tracts by old population, HH Size and Family Numbers:
+    Sort tracts by desired filters */
+    
+var OldPop = DesRent.aggregate_stats('Pct_ge65yr');
+print('Old Pop',OldPop);
+
+// Create Chart to see the distribution of senior populaiton within the Desired Rent Tracts
+var sortOldPop= DesRent.sort('Pct_ge65yr', true);
+var AgeChart= Chart.feature.histogram(DesRent, 'Pct_ge65yr', 63);
+var AgeChart= AgeChart.setSeriesNames(['Percent over 65']);
+var AgeChart= AgeChart.setOptions({title: 'Distribution of Elderly Population in Desired Tracts',
+                                  colors: ['Peru'],
+                                  hAxis: {title:'Percent of Elderly'},
+                                  vAxis: {title:'Number of Census Tracts'}});
+                                  
+print(AgeChart);
+print('sorted old age', sortOldPop);
+
+// Create Chart to see the distribution of Household Sizes within the Desired Rent Tracts
+
+var HH_Size = DesRent.aggregate_stats('Avg_HHSze');
+print('HH_Size', HH_Size);
+// Create Chart to see the distribution of household sizes within the Desired Rent Tracts
+var sortHHSize = DesRent.sort('Avg_HHSze', true);
+var HHSizeChart= Chart.feature.histogram(DesRent, 'Avg_HHSze', 63);
+var HHSizeChart= HHSizeChart.setSeriesNames(['Average Household Size']);
+var HHSizeChart= HHSizeChart.setOptions({title: 'Distribution of Household Sizes in Desired Tracts',
+                                  colors: ['SteelBlue'],
+                                  hAxis: {title:'Average Household Size'},
+                                  vAxis: {title:'Number of Census Tracts'}});
+                                  
+print(HHSizeChart);
+print('sorted HH by Size', sortHHSize);
+
+// Create Chart to see the distribution of Families within the Desired Rent Tracts
+
+
+var Fam = DesRent.aggregate_stats('Families');
+print('Fam', Fam);
+var sortFam = DesRent.sort('Families', true);
+var FamChart= Chart.feature.histogram(DesRent, 'Families', 63);
+var FamChart= FamChart.setSeriesNames(['Total Population of Families']);
+var FamChart= FamChart.setOptions({title: 'Distribution of Families in Desired Tracts',
+                                  colors: ['MIdnightBlue'],
+                                  hAxis: {title:'Total Number of Families'},
+                                  vAxis: {title:'Number of Census Tracts'}});
+                                  
+print(FamChart);
+
+print('sorted Families', sortFam);
+// Run through 3 criteria
+// Tracts with most seniors
+var Seniors = DesRent.filterMetadata('Pct_ge65yr', "greater_than", 18);
+// display selected tracts
+Map.addLayer(Seniors,{color: 'ffe6ee'}, "Seniors Tracts");
+// Tracts with smallest household sizes
+var Small_HHSize = Seniors.filterMetadata('Avg_HHSze', "not_greater_than", 3);
+// display selected tracts
+Map.addLayer(Small_HHSize,{color: 'ff9900'}, "Small Sized Households ");
+// Tracts with smallest Families
+var Small_Families = Small_HHSize.filterMetadata('Families', "not_greater_than", 1208);
+// display selected tracts
+Map.addLayer(Small_Families,{color: 'ffc266'}, "Smallest Number of Families ");
+
+
+
+// add the subway stations
+var MetroNorthRR = ee.FeatureCollection('ft:1cS-o4llIZj7LExRM4F7Q_aL8Ldd_SUQU1gs_ZjQa');
+Map.addLayer(MetroNorthRR, {color: '0000ff', opacity: 0.5}, 'MetroNorth Railroad Stations');
+print('MetroNorth',MetroNorthRR); // look at the data
+// filter just the stops in Connecticut 
+var NewHavenLineCT = MetroNorthRR.filterBounds(ConnCensTr);
+var NHLineCT = (NewHavenLineCT);
+Map.addLayer(NHLineCT, {color: 'ffff00'}, 'CT New Haven Line');
+
+// Create Buffer around remaining neighborhoods
+var buffered  = NHLineCT.geometry().buffer( 2500 );  
+var buffer = Map.addLayer(buffered, {color: 'ffffff'}, 'Transit buffer');
+// Isolate Tracts intersecting with buffer
+var TOD = Small_Families.filterBounds(buffered);
+Map.addLayer(TOD,{color: 'ff9999'}, 'Transit Oriented Dev');
+// Add schools
+var Schools = ee.FeatureCollection('ft:14Kt7j78DgaPN63k8z5yIdqpPYrdZMezQbLXFTC3I');
+Map.addLayer(Schools, {color: '70db70', opacity: 0.2}, 'Schools');
+print('Schools', Schools);
+
+// get bounds for TOD
+
+var Filtered      = ee.Filter.withinDistance( 0.5, '.geo', null, '.geo' );   
+var TheJOIN        = ee.Join.simple();
+var JoinedFeatures = TheJOIN.apply( TOD, Schools, Filtered );
+
+
+var distSaveAll = ee.Join.saveAll({
+  matchesKey: 'points',
+  measureKey: 'distance'
+});
+
+// Apply the join.
+var spatialJoined = distSaveAll.apply(TOD, Schools, Filtered);
+
+// Print the result.
+print('Join',spatialJoined);
+print('size',spatialJoined.size());
+
+// Accessing the points as Lists
+var size = spatialJoined.size().getInfo();
+print('sizes', size);
+for (var i = 0; i < size ; i++) {
+var myFeatureList = spatialJoined.toList(1);
+print('myFeatureList', myFeatureList);
+var theFeature = ee.Feature(myFeatureList.get(0));
+print('theFeature', theFeature);
+var listOfPoints = theFeature.get('points');
+print('List of Points ' +i, listOfPoints);
+Map.addLayer(theFeature, {color: 'ff00ff'},'Best Neighborhood');
+Map.centerObject(theFeature,12);
+}
