@@ -1,0 +1,211 @@
+//Add CT census tracts
+var CTtracts=ee.FeatureCollection('ft:1xa2PvKTf7ynyAAEXEeHoltriaHFkyFJpvd74BLc6'); //cenus tracts
+Map.addLayer(CTtracts,{ color:'BDC3C7' }, 'Connecticut Tracts');
+
+//Add TreeHouse Brewery Point
+var TreehouseGeometry = ee.Geometry.Point(-72.016393,42.139303);  // TreeHouse Point
+Map.addLayer(TreehouseGeometry, {color: 'FF0000'}, 'TreeHouse Brewery');
+
+//create bufer around treehouse
+var firstbuffer  = TreehouseGeometry.buffer( 80000 );  //80km =^= 50miles
+Map.addLayer(firstbuffer, {min: 0, max: 3000}, ' TreeHousebuffer');
+
+//add parks
+var OpenSpaces= ee.FeatureCollection('ft:19rLgwZNVh23vfXW1IVcyHbHJ9YyLvJoZFlHKo8Yt');
+Map.addLayer(OpenSpaces,{color:'009900'},'Open Spaces');
+print(OpenSpaces,' open spaces');
+
+//isolate tracts + parks outside of the buffer
+var TractsOutsideBuffer = ee.Filter.disjoint( '.geo', firstbuffer);
+var TractsOutsideBuffer2 = CTtracts.filter(TractsOutsideBuffer);
+Map.addLayer(TractsOutsideBuffer2,{color:'ffff66'}, "Tracts at least 50miles away from Tree House Brewery");
+var ParksOutsideBuffer = ee.Filter.disjoint( '.geo', firstbuffer);
+var ParksOutsideBuffer2 = OpenSpaces.filter(ParksOutsideBuffer);
+Map.addLayer(ParksOutsideBuffer2, {color: '001a0d'}, 'Parks outside of Buffer');
+
+// open space stats 
+var OpenSpaceAcres = print('acres',OpenSpaces.aggregate_stats('ACRE_GIS')); 
+var sortParkCategory = print('Park Categories Sorted',OpenSpaces.sort('CATEGORY_ft_style', true));
+//print open space stats
+var OpenSpaceOwnership = print('CATEGORY',OpenSpaces.aggregate_stats('CATEGORY_ft_style'));
+var ParkChart = Chart.feature.histogram(OpenSpaces, 'CATEGORY_ft_style', 3645);
+var ParkChart= ParkChart.setSeriesNames(['Numbers of Open Spaces']);
+var ParkChart= ParkChart.setOptions({title: 'Distribution of Open Spaces in Desired Tracts',
+                                  colors: ['DarkOliveGreen'],
+                                  hAxis: {title:'Category'},
+                                  vAxis: {title:'Total Number of Open SPaces'}});
+                                  
+print(ParkChart);
+
+// Join parks to census tracts
+
+var Filtered      = ee.Filter.withinDistance( 0.5, '.geo', null, '.geo' );   
+var TheJOIN        = ee.Join.simple();
+var JoinedFeatures = TheJOIN.apply( ParksOutsideBuffer2, TractsOutsideBuffer2, Filtered );
+
+
+var distSaveAll = ee.Join.saveAll({
+  matchesKey: 'polygon',
+  measureKey: 'distance'
+});
+
+// Apply the join.
+var spatialJoined = distSaveAll.apply(ParksOutsideBuffer2, TractsOutsideBuffer2, Filtered);
+
+// Print the result.
+print('Join',spatialJoined);
+// isolate tracts with ample open space
+Map.addLayer(spatialJoined, {color: 'b300b3'}, "Joined Parks + Census Tracts");
+
+// Leave for now until you find a more specific census tract. This is because we will need a zoning overlay
+// and there is not a zoning overlay file for the entire state of CT. So we will need to find a smaller 
+// geography i.e. town etc for which we can apply a zoning/land use map. 
+
+
+var existing_breweries = ee.FeatureCollection('ft:1BKE-NCK5VLl2z187rQWCaYGc7HHUFtttpGdY0AWr' );
+Map.addLayer(existing_breweries,{color:'ff4000'},"Existing Breweries");
+print('existing breweries', existing_breweries);
+
+// Make 20 mile buffers around breweries
+var  existing_brew_buff = existing_breweries.geometry().buffer(3200);
+Map.addLayer(existing_brew_buff,{color:'99ccff', opacity: 0.6},'20 mile buffer around breweries');
+
+// Tracts 20 miles away from existing breweries
+var TractsOutsideBuffer3 = ee.Filter.disjoint( '.geo', existing_brew_buff);
+var TractsOutsideBuffer4 = TractsOutsideBuffer2.filter(TractsOutsideBuffer3);
+Map.addLayer(TractsOutsideBuffer4,{color:'666600'}, "Tracts 20 miles away from an existing Brewery in CT");
+
+var CTColleges = ee.FeatureCollection('ft:163k9Zv6kETsCx35AjX9qAZgQ5Da-bFgaI8C7Pg8e');
+Map.addLayer(CTColleges, {color: '000000'}, 'Colleges in Connecticut');
+print('connecticut universities', CTColleges);
+
+// Join Schools to census tracts
+
+var Filtered2      = ee.Filter.withinDistance( 8000, '.geo', null, '.geo' );   
+var TheJOIN2        = ee.Join.simple();
+var JoinedFeatures2 = TheJOIN.apply( TractsOutsideBuffer4, CTColleges, Filtered );
+
+
+var distSaveAll2 = ee.Join.saveAll({
+  matchesKey: 'polygon',
+  measureKey: 'distance'
+});
+
+// Apply the join.
+var schoolTractJoin = distSaveAll.apply(TractsOutsideBuffer2, CTColleges, Filtered2);
+
+// Print the result.
+print('School Tract Join',schoolTractJoin);
+// isolate tracts with schools 
+Map.addLayer(schoolTractJoin, {color: 'cce6ff'}, "Joined Schools + Census Tracts");
+
+// Filter parks again by our remaining census tracts
+
+var parkswithinCollegeRadius = ee.Filter.intersects( '.geo', schoolTractJoin.geometry());
+var parkswithinCollegeRadius2 = ParksOutsideBuffer2.filter(parkswithinCollegeRadius);
+Map.addLayer(parkswithinCollegeRadius2,{color:'53c653', opacity: 15}, "Parks near college tracts");
+
+
+// Parks in college town stats 
+var NewParkAcres = print('acres',parkswithinCollegeRadius2.aggregate_stats('ACRE_GIS')); 
+var sortNewParkCategory = print('NewPark Categories Sorted',parkswithinCollegeRadius2.sort('CATEGORY_ft_style', true));
+var sortNewParkAcres = print('NewPark Acres Sorted', parkswithinCollegeRadius2.sort('ACRE_GIS'));
+//print open space stats
+var NewParkOwnership = print('CATEGORY',parkswithinCollegeRadius2.aggregate_stats('CATEGORY_ft_style'));
+var NewParkChart = Chart.feature.histogram(parkswithinCollegeRadius2, 'CATEGORY_ft_style', 1229);
+var NewParkChart= NewParkChart.setSeriesNames(['Number of Open Spaces']);
+var NewParkChart= NewParkChart.setOptions({title: 'Distribution of Open Spaces in Desired Tracts',
+                                  colors: ['DarkOliveGreen'],
+                                  hAxis: {title:'Category'},
+                                  vAxis: {title:'Total Number of Open SPaces'}});
+                                  
+print(NewParkChart);
+
+// filter tracts by largest number of schools
+
+
+// Accessing the tracts as Lists
+var size = spatialJoined.size().getInfo();
+print('sizes', size);
+for (var i = 0; i < size ; i++) {
+var myFeatureList = spatialJoined.toList(1);
+print('myFeatureList', myFeatureList);
+var theFeature = ee.Feature(myFeatureList.get(0));
+print('theFeature', theFeature);
+var listOfPoints = theFeature.get('points');
+print('List of Points ' +i, listOfPoints);
+Map.addLayer(theFeature, {color: 'ff00ff'},'Best Neighborhood');
+Map.centerObject(theFeature,12);
+}
+
+/*
+// Join Schools to census tracts
+
+var Filtered2      = ee.Filter.withinDistance( 0.5, '.geo', null, '.geo' );   
+var TheJOIN2        = ee.Join.simple();
+var JoinedFeatures2 = TheJOIN.apply( CTColleges, TractsOutsideBuffer2, Filtered );
+
+
+var distSaveAll2 = ee.Join.saveAll({
+  matchesKey: 'polygon',
+  measureKey: 'distance'
+});
+
+// Apply the join.
+var schoolTractJoin = distSaveAll.apply(CTColleges, TractsOutsideBuffer4, Filtered2);
+
+// Print the result.
+print('School Tract Join',schoolTractJoin);
+// isolate tracts with schools 
+Map.addLayer(schoolTractJoin, {color: '3399ff'}, "Joined Schools + Census Tracts");
+*/
+
+
+//Step 6: Create 10-km buffers around existinh breweries and then
+//find census tracts that do not lie within these buffers
+/*var BrewBuf = existing_breweries.map(function(feature) { 
+  return feature.buffer(10000); });
+var BrewGeo = BrewBuf.geometry();
+var TheFilter3 =
+ee.Filter.disjoint( '.geo',
+BrewGeo );
+
+
+//Center the map on Connecticut
+
+
+//Step 7: Finally, select the tracts that satisfy all the five
+criteria & display them on the map & print out the result!
+var Result = Criteria_1_2.filterBounds(BCbuff)
+.filterBounds(throughRd)
+
+
+
+
+Map.centerObject(TreehouseGeo,8);
+
+
+.filterMetadata("POP", "greater_than", 0)
+.filterMetadata("AREA", "greater_than", 0)
+.filterMetadata("HHs", "greater_than", 0);
+*/
+//var CTroad = ee.FeatureCollection('ft:1GqjJDesYsPkLVqJ1dyiPplfMvcAY2LCwfTPye9O0');
+
+//Center the map on Connecticut
+//and add relevant layers
+//Map.centerObject(CTtracts, 8);
+//Map.addLayer(CTroad,{color:'138D75'},"Major Roads");
+/*
+//Step 6: Create 10-km buffers around existinh breweries and then
+//find census tracts that do not lie within these buffers
+var BrewBuf = existing_breweries.map(function(feature) { 
+  return feature.buffer(10000); });
+var BrewGeo = BrewBuf.geometry();
+var TheFilter3 =
+ee.Filter.disjoint( '.geo',
+BrewGeo );
+//var NoBrew =
+//CTtracts_addPopDen.filter(TheFilter3);
+Map.addLayer(BrewBuf,{color:'FDFEFE'}, "10 km buffers around existing breweries");
+//Map.addLayer(NoBrew,{color:'F7DC6F'}, "Tracts at least 10 km away from existing breweries");
+*/
