@@ -121,19 +121,76 @@ var NewParkChart= NewParkChart.setOptions({title: 'Distribution of Open Spaces i
                                   
 print(NewParkChart);
 
-// filter tracts by largest number of schools
+/* filter tracts by largest number of schools
+var filtermetadataschools = schoolTractJoin.filterMetadata("distance", "greater_than", 0)
 
+var filterbounds = ee.Filter.bounds( spatialObject, errorMargin )
+var filter = ee.Filter.withinDistance(5000, '.geo', OneRegionGEOMETRY )
+var filtertractswschools = schoolTractJoin.filterMetadata()
+//for (var i = 0; i < size ; i++) {
+//var myFeatureList = spatialJoined.toList(1);
+*/
 
 // Accessing the tracts as Lists
+var distance = schoolTractJoin.size();
+print(distance,'distance');
+for (var i = 0; i < distance ; i++) {
+var FeatureList = schoolTractJoin.toList(1, i);
+var theFeature = ee.Feature(FeatureList.get(0));
+var listOfdistances = theFeature.get('distance');
+print('List of Distances ' +i, listOfdistances);
+}
+// Accessing the points as Lists
 var size = spatialJoined.size().getInfo();
-print('sizes', size);
+print(size);
+for (var i = 0; i < size ; i++) {
+var myFeatureList = spatialJoined.toList(1, i);
+var theFeature = ee.Feature(myFeatureList.get(0));
+var listOfPoints = theFeature.get('points');
+print('List of Points ' +i, listOfPoints);
+}
+/*
+var distance = schoolTractJoin.count().getInfo();
+print('count', distance);
+var distanceitems = schoolTractJoin.get('distance');
+var distanceitems2 = schoolTractJoin.toList();
+
+
+
+var filterdistance = ee.filter.getInfo();
+var myFeatureList = schoolTractJoin.Filter.inList(1,i)
+var size = spatialJoined.size().getInfo();
+print(size);
+for (var i = 0; i < size ; i++) {
+var myFeatureList = spatialJoined.toList(1, i);
+var theFeature = ee.Feature(myFeatureList.get(0));
+var listOfPoints = theFeature.get('points');
+print('List of Points ' +i, listOfPoints);
+}
+
+
+for (var i = 0; i < distance ; i++) {
+var myFeatureList = schoolTractJoin.toList(1);
+print('myFeatureList', myFeatureList);
+var theFeature = ee.Feature(myFeatureList.get(0));
+print('theFeature', theFeature);
+var listOfPoints = theFeature.get('points');
+print('List of Points ' +i, listOfPoints);
+Map.addLayer(theFeature, {color: 'ff00ff'},'Best Neighborhood');
+Map.centerObject(theFeature,12);
+}
+
+/*
+var aslist = schoolTractJoin.toList('distance')
+var count = schoolTractJoin.count().getInfo();
+print('count', count);
 for (var i = 0; i < size ; i++) {
 var myFeatureList = spatialJoined.toList(1);
 print('myFeatureList', myFeatureList);
 var theFeature = ee.Feature(myFeatureList.get(0));
 print('theFeature', theFeature);
 var listOfPoints = theFeature.get('points');
-print('List of Points ' +i, listOfPoints);
+print('List of Distances ' +i, listOfPoints);
 Map.addLayer(theFeature, {color: 'ff00ff'},'Best Neighborhood');
 Map.centerObject(theFeature,12);
 }
